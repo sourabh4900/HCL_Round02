@@ -10,11 +10,11 @@ from typing import Optional
 
 import chromadb
 import numpy as np
+import requests
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from sentence_transformers import SentenceTransformer
 
 try:
     from google import genai
@@ -25,11 +25,13 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(PROJECT_ROOT / ".env")
 
 CHROMA_DIR = PROJECT_ROOT / "chroma_db"
-MODEL_NAME = "all-MiniLM-L6-v2"
+MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 COLLECTION_NAME = "career_profiles"
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 
-model: SentenceTransformer | None = None
+HF_API_URL = f"https://api-inference.huggingface.co/pipeline/feature-extraction/{MODEL_NAME}"
+HF_API_KEY = os.getenv("HUGGINGFACE_API_KEY", "").strip()
+
 chroma_collection = None
 users: dict[str, dict] = {}
 
@@ -71,13 +73,40 @@ class PathResponse(BaseModel):
     source: str
 
 
+def get_hf_embeddings(texts: list[str]) -> list[list[float]]:
+    """Call the Hugging Face Inference API to get sentence embeddings for a batch of texts."""
+    if not HF_API_KEY:
+        raise RuntimeError(
+            "HUGGINGFACE_API_KEY is not set. Add it to your environment variables."
+        )
+    headers = {"Authorization": f"Bearer {HF_API_KEY}"}
+    payload = {"inputs": texts, "options": {"wait_for_model": True}}
+
+    response = requests.post(HF_API_URL, headers=headers, json=payload, timeout=30)
+    if response.status_code != 200:
+        raise RuntimeError(
+            f"Hugging Face API error ({response.status_code}): {response.text}"
+        )
+
+    data = response.json()
+    # The feature-extraction pipeline for sentence-transformers models returns
+    # one already-pooled vector per input string: List[List[float]].
+    # Some deployments may return an extra token dimension (List[List[List[float]]]);
+    # handle that case by mean-pooling over tokens.
+    embeddings: list[list[float]] = []
+    for item in data:
+        arr = np.array(item)
+        if arr.ndim == 2:
+            arr = arr.mean(axis=0)
+        embeddings.append(arr.tolist())
+    return embeddings
+
+
 def average_embedding(texts: list[str]) -> list[float]:
-    if model is None:
-        raise RuntimeError("Embedding model is not loaded.")
     if not texts:
         raise ValueError("At least one skill or interest is required.")
-    vectors = model.encode(texts)
-    mean_vector = np.mean(vectors, axis=0)
+    vectors = get_hf_embeddings(texts)
+    mean_vector = np.mean(np.array(vectors), axis=0)
     return mean_vector.tolist()
 
 
@@ -341,12 +370,15 @@ Format the output as clear sections with month headings and bullet points.
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    global model, chroma_collection
-    model = SentenceTransformer(MODEL_NAME)
+    global chroma_collection
+    if not HF_API_KEY:
+        print(
+            "WARNING: HUGGINGFACE_API_KEY is not set. "
+            "Embedding calls will fail until it is configured."
+        )
     client = chromadb.PersistentClient(path=str(CHROMA_DIR))
     chroma_collection = client.get_or_create_collection(COLLECTION_NAME)
     yield
-    model = None
     chroma_collection = None
 
 
