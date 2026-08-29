@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+venv/
+.venv/
+
+# Environment secrets
+.env
+
+# ChromaDB (large, re-buildable from data/)
+# Uncomment the line below if you do NOT want to commit the pre-built index:
+# chroma_db/
+
+# Node
+node_modules/
+frontend/dist/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+explanation.md
