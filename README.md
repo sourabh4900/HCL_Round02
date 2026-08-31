@@ -1,7 +1,7 @@
 <![CDATA[<div align="center">
 
 # 🧭 Career PathFinder
-
+ 
 ### AI-Powered Career Guidance & Personalised Learning Roadmaps
 
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)](https://python.org)
