@@ -1,4 +1,4 @@
-<![CDATA[<div align="center">
+<div align="center">
 
 # 🧭 Career PathFinder
  
@@ -521,4 +521,4 @@ This project is for educational and demonstration purposes. See the repository f
 **Built with ❤️ using FastAPI, React, ChromaDB, and Google Gemini**
 
 </div>
-]]>
+
